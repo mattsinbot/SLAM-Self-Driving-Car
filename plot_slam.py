@@ -11,7 +11,7 @@ def plot_ground_truth():
     x_coord = []
     y_coord = []
 
-    for line in open('Landmark_Groundtruth.dat', 'r'):
+    for line in open('./dataset_1/Landmark_Groundtruth.dat', 'r'):
         data = line.rstrip().split()
         landmark_sig.append(float(data[0]))
         x_coord.append(float(data[1]))
@@ -23,7 +23,7 @@ def plot_ground_truth():
     rbt_y = []
     rbt_th = []
 
-    for line in open('Robot1_Groundtruth.dat', 'r'):
+    for line in open('./dataset_1/Robot1_Groundtruth.dat', 'r'):
         data = line.rstrip().split()
         rbt_tstamp.append(float(data[0]))
         rbt_x.append(float(data[1]))

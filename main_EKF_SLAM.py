@@ -3,7 +3,6 @@ from os import path
 import math
 from matplotlib import pyplot as plt
 
-
 def conBear(oldBear):
     while oldBear < -np.pi:
         oldBear += 2*np.pi
@@ -15,7 +14,6 @@ def conBear(oldBear):
 
     return newBear
 
-
 # File path
 file_path = path.dirname(path.realpath(__file__))
 
@@ -24,6 +22,7 @@ DATASET_FOLDER = 'dataset_refined'
 ODOMETRY_DATA = 'robot1_Odo.txt'
 MEASUREMENT_DATA = 'robot1_Mesurement.txt'
 GROUND_TRUTH = 'robot1_grnd_truth.txt'
+LANDMARK_GRND_TRUTH = 'grnd_truth_LandMark.txt'
 
 # Read Odometry Data
 data_path = file_path + '/' + DATASET_FOLDER + '/' + ODOMETRY_DATA
@@ -33,9 +32,13 @@ odo_array = np.loadtxt(data_path, dtype=float)
 measurement_path = file_path + '/' + DATASET_FOLDER + '/' + MEASUREMENT_DATA
 measurement_array = np.loadtxt(measurement_path, dtype=float)
 
-# read ground truth data
+# read ground truth data of the robot
 ground_truth = file_path + '/' + DATASET_FOLDER + '/' + GROUND_TRUTH
 ground_truth_array = np.loadtxt(ground_truth, dtype=float)
+
+# read ground truth data of the landmarks
+landmark_ground_truth = file_path + '/' + DATASET_FOLDER + '/' + LANDMARK_GRND_TRUTH
+landmark_ground_truth_array = np.loadtxt(landmark_ground_truth, dtype=float)
 
 # dictionary of Barcodes and Landmarks
 codeDict = {'5.0': 1, '14.0': 2, '41.0': 3, '32.0': 4, '23.0': 5, '72.0': 6, '27.0': 7, '54.0': 8, '70.0': 9, '36.0': 10, '18.0': 11, '25.0': 12,
@@ -56,28 +59,29 @@ dt = 0.02
 # Number of landmarks
 numLM = 15
 
-# Initialize state estimation matrix
-robotEstPose = np.zeros((ground_truth_array.shape[0], 4))
-
 # Initialize state covariance matrix
 stateCov = np.zeros((3 * numLM + 3, 3 * numLM + 3))
 stateCov[0:3, 0:3] = 0.001
 
-for i in range(3 * numLM + 3):
+for i in range(3, 3 * numLM + 3):
     stateCov[i, i] = 0.65
+# print(stateCov)
 
 # Generate reshape matrix
 fx = np.hstack((np.eye(3), np.zeros((3, 3 * numLM))))
 
 # Path of motion
 # Set initial motions
-start_idx = 599
+start_idx = 600  # before that index, data is not very useful
 
 # Initialize state mean
 stateMean = np.array([[ground_truth_array[start_idx, 1]],
                       [ground_truth_array[start_idx, 2]],
                       [ground_truth_array[start_idx, 3]]])
 stateMean = fx.T.dot(stateMean)
+
+# Initialize state estimation matrix
+robotEstPose = np.zeros((ground_truth_array.shape[0], 4))
 
 # Initial robot velocity and heading angle
 mIdx = 0
@@ -122,7 +126,8 @@ for i in range(start_idx, ground_truth_array.shape[0]):  # odo_array.shape[0]):
     # Add features which are newly visible
     z = np.zeros((3, 1))
     while (measurement_array[mIdx, 0] - t < 0.005) and (mIdx < measurement_array.shape[0]-1):
-        print('mIdx: {}'.format(mIdx))
+        if (mIdx%500 == 0):
+            print('Measurement index: {}'.format(mIdx))
         barCode = measurement_array[mIdx, 1]
         landmarkId = 0
 
@@ -144,8 +149,7 @@ for i in range(start_idx, ground_truth_array.shape[0]):  # odo_array.shape[0]):
 
     # if features are observed
     # loop over all features and compute Kalman gain
-    if z[2, 0] > 0:    # do no know why Z[2, 0] > 1, in my sense it has to be 0
-        # S = np.zeros((np.shape(z)[1], 3, 3))
+    if z[2, 0] > 0:    # do not know why Z[2, 0] > 1, in my sense it has to be 0
         zHat = np.zeros((3, z.shape[1]))
 
         for k in range(z.shape[1]):
@@ -160,6 +164,7 @@ for i in range(start_idx, ground_truth_array.shape[0]):  # odo_array.shape[0]):
                 stateMeanBar[3*j:3*j+3] = np.array([[stateMeanBar[0, 0] + landmark_pos[0, 0]],
                                                     [stateMeanBar[1, 0] + landmark_pos[1, 0]],
                                                     [0]])
+
             # compute predicted range and bearing
             delta = np.array([[stateMeanBar[3 * j, 0] - stateMeanBar[0, 0]],
                               [stateMeanBar[3 * j + 1, 0] - stateMeanBar[1, 0]]])
@@ -199,9 +204,33 @@ for i in range(start_idx, ground_truth_array.shape[0]):  # odo_array.shape[0]):
     stateCov = stateCovBar
     robotEstPose[i, :] = [t, stateMean[0, 0], stateMean[1, 0], stateMean[2, 0]]
 
-print(stateMean[0:3, 0])
+# print(stateMean[0:3, 0])
+print(ground_truth_array[ground_truth_array.shape[0]-1, :])
 print(robotEstPose[robotEstPose.shape[0]-1, :])
+# print("stateMean: ")
+# print(stateMean)
+# print(ground_truth_array[start_idx, :])
+# print(robotEstPose[start_idx, :])
 
-# Plot map
-plt.plot(robotEstPose[:, 1], robotEstPose[:, 2])
+# Plot map and robot's estimated and ground truth poses
+plt.figure()
+plt.plot(robotEstPose[start_idx:, 1], robotEstPose[start_idx:, 2], label="estimated", color="green")
+plt.plot(ground_truth_array[start_idx:, 1], ground_truth_array[start_idx:, 2], label="ground truth", color="orange")
+
+plt.plot(ground_truth_array[start_idx, 1], ground_truth_array[start_idx, 2], marker="D", color="blue", label="start")
+plt.plot(robotEstPose[-1, 1], robotEstPose[-1, 2], marker="D", color="m", label="goal estimated")
+plt.plot(ground_truth_array[-1, 1], ground_truth_array[-1, 2], marker="D", color="m", label="goal ground truth")
+
+# Plot the estimated landmarks
+for lm in range(numLM):
+    plt.plot(stateMean[3*(lm+1), 0], stateMean[3*(lm+1)+1, 0], marker="^", markersize=15, color="brown")
+
+# Plot the ground thuth of the landmarks
+# print(landmark_ground_truth_array)
+for lm in range(numLM):
+    plt.plot(landmark_ground_truth_array[lm, 1], landmark_ground_truth_array[lm, 2], marker="^", markersize=15, color="red")
+
+# plt.legend()
+plt.xlabel("x [m]")
+plt.ylabel("y [m]")
 plt.show()
